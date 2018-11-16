@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/nomad/client/allocwatcher"
 	"github.com/hashicorp/nomad/client/config"
 	"github.com/hashicorp/nomad/client/consul"
+	"github.com/hashicorp/nomad/client/devicemanager"
 	cinterfaces "github.com/hashicorp/nomad/client/interfaces"
 	cstate "github.com/hashicorp/nomad/client/state"
 	cstructs "github.com/hashicorp/nomad/client/structs"
@@ -100,6 +101,10 @@ type allocRunner struct {
 	// pluginSingletonLoader is a plugin loader that will returns singleton
 	// instances of the plugins.
 	pluginSingletonLoader loader.PluginCatalog
+
+	// devicemanager is used to mount devices as well as lookup device
+	// statistics
+	devicemanager devicemanager.Manager
 }
 
 // NewAllocRunner returns a new allocation runner.
@@ -126,6 +131,7 @@ func NewAllocRunner(config *Config) (*allocRunner, error) {
 		allocBroadcaster:         cstructs.NewAllocBroadcaster(),
 		prevAllocWatcher:         config.PrevAllocWatcher,
 		pluginSingletonLoader:    config.PluginSingletonLoader,
+		devicemanager:            config.DeviceManager,
 	}
 
 	// Create the logger based on the allocation ID
@@ -159,6 +165,7 @@ func (ar *allocRunner) initTaskRunners(tasks []*structs.Task) error {
 			Consul:                ar.consulClient,
 			Vault:                 ar.vaultClient,
 			PluginSingletonLoader: ar.pluginSingletonLoader,
+			DeviceManager:         ar.devicemanager,
 		}
 
 		// Create, but do not Run, the task runner

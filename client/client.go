@@ -795,6 +795,7 @@ func (c *Client) restoreState() error {
 			PrevAllocWatcher:      prevAllocWatcher,
 			PluginLoader:          c.config.PluginLoader,
 			PluginSingletonLoader: c.config.PluginSingletonLoader,
+			DeviceManager:         c.devicemanager,
 		}
 		c.configLock.RUnlock()
 
@@ -1963,6 +1964,7 @@ func (c *Client) addAlloc(alloc *structs.Allocation, migrateToken string) error 
 		PrevAllocWatcher:      prevAllocWatcher,
 		PluginLoader:          c.config.PluginLoader,
 		PluginSingletonLoader: c.config.PluginSingletonLoader,
+		DeviceManager:         c.devicemanager,
 	}
 	c.configLock.RUnlock()
 

@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/nomad/client/allocrunner/taskrunner/state"
 	"github.com/hashicorp/nomad/client/config"
 	"github.com/hashicorp/nomad/client/consul"
+	"github.com/hashicorp/nomad/client/devicemanager"
 	"github.com/hashicorp/nomad/client/driver/env"
 	cstate "github.com/hashicorp/nomad/client/state"
 	cstructs "github.com/hashicorp/nomad/client/structs"
@@ -52,11 +53,12 @@ const (
 )
 
 type TaskRunner struct {
-	// allocID, taskName, and taskLeader are immutable so these fields may
+	// allocID, taskName, taskLeader, and taskResources are immutable so these fields may
 	// be accessed without locks
-	allocID    string
-	taskName   string
-	taskLeader bool
+	allocID       string
+	taskName      string
+	taskLeader    bool
+	taskResources *structs.AllocatedTaskResources
 
 	alloc     *structs.Allocation
 	allocLock sync.Mutex
@@ -136,6 +138,9 @@ type TaskRunner struct {
 	// transistions.
 	runnerHooks []interfaces.TaskHook
 
+	// hookResources captures the resources provided by hooks
+	hookResources *hookResources
+
 	// consulClient is the client used by the consul service hook for
 	// registering services and checks
 	consulClient consul.ConsulServiceAPI
@@ -164,6 +169,10 @@ type TaskRunner struct {
 	// PluginSingletonLoader is a plugin loader that will returns singleton
 	// instances of the plugins.
 	pluginSingletonLoader loader.PluginCatalog
+
+	// devicemanager is used to mount devices as well as lookup device
+	// statistics
+	devicemanager devicemanager.Manager
 }
 
 type Config struct {
@@ -186,6 +195,10 @@ type Config struct {
 	// PluginSingletonLoader is a plugin loader that will returns singleton
 	// instances of the plugins.
 	PluginSingletonLoader loader.PluginCatalog
+
+	// DeviceManager is used to mount devices as well as lookup device
+	// statistics
+	DeviceManager devicemanager.Manager
 }
 
 func NewTaskRunner(config *Config) (*TaskRunner, error) {
@@ -231,10 +244,22 @@ func NewTaskRunner(config *Config) (*TaskRunner, error) {
 		triggerUpdateCh:       make(chan struct{}, triggerUpdateChCap),
 		waitCh:                make(chan struct{}),
 		pluginSingletonLoader: config.PluginSingletonLoader,
+		devicemanager:         config.DeviceManager,
 	}
 
 	// Create the logger based on the allocation ID
 	tr.logger = config.Logger.Named("task_runner").With("task", config.Task.Name)
+
+	// Pull out the task's resources
+	ares := tr.alloc.AllocatedResources
+	if ares != nil {
+		if tres, ok := ares.Tasks[tr.taskName]; ok {
+			tr.taskResources = tres
+		}
+
+		// TODO in the else case should we do a migration from resources as an
+		// upgrade path
+	}
 
 	// Build the restart tracker.
 	tg := tr.alloc.Job.LookupTaskGroup(tr.alloc.TaskGroup)
@@ -497,7 +522,6 @@ func (tr *TaskRunner) runDriver() error {
 		return fmt.Errorf("failed to encode driver config: %v", err)
 	}
 
-	//TODO mounts and devices
 	//XXX Evaluate and encode driver config
 
 	// If there's already a task handle (eg from a Restore) there's nothing
@@ -649,6 +673,8 @@ func (tr *TaskRunner) buildTaskConfig() *drivers.TaskConfig {
 			NomadResources: tr.task.Resources,
 			//TODO Calculate the LinuxResources
 		},
+		Devices:    tr.hookResources.getDevices(),
+		Mounts:     tr.hookResources.getMounts(),
 		Env:        tr.envBuilder.Build().Map(),
 		User:       tr.task.User,
 		AllocDir:   tr.taskDir.AllocDir,
