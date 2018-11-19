@@ -682,6 +682,57 @@ func (s *StateStore) UpdateNodeStatus(index uint64, nodeID, status string, event
 	return nil
 }
 
+// UpdateNodeMetadata is used to update the metadata for a node
+func (s *StateStore) UpdateNodeMetadata(index uint64, nodeID string, upserts map[string]string, deletes []string, event *structs.NodeEvent) error {
+	txn := s.db.Txn(true)
+	defer txn.Abort()
+
+	// Lookup the node
+	existing, err := txn.First("nodes", "id", nodeID)
+	if err != nil {
+		return fmt.Errorf("node lookup failed: %v", err)
+	}
+	if existing == nil {
+		return fmt.Errorf("node not found")
+	}
+
+	// Copy the existing node
+	existingNode := existing.(*structs.Node)
+	copyNode := existingNode.Copy()
+
+	// Add the event if given
+	if event != nil {
+		appendNodeEvents(index, copyNode, []*structs.NodeEvent{event})
+	}
+
+	if copyNode.Meta == nil {
+		copyNode.Meta = make(map[string]string)
+	}
+
+	// Update the metadata in the copy
+	for k, v := range upserts {
+		if _, ok := copyNode.Meta[k]; ok {
+			s.logger.Info("overwiting metadata value for key:", k)
+		}
+		copyNode.Meta[k] = v
+	}
+	for _, k := range deletes {
+		delete(copyNode.Meta, k)
+	}
+	copyNode.ModifyIndex = index
+
+	// Insert the node
+	if err := txn.Insert("nodes", copyNode); err != nil {
+		return fmt.Errorf("node update failed: %v", err)
+	}
+	if err := txn.Insert("index", &IndexEntry{"nodes", index}); err != nil {
+		return fmt.Errorf("index update failed: %v", err)
+	}
+
+	txn.Commit()
+	return nil
+}
+
 // BatchUpdateNodeDrain is used to update the drain of a node set of nodes
 func (s *StateStore) BatchUpdateNodeDrain(index uint64, updates map[string]*structs.DrainUpdate, events map[string]*structs.NodeEvent) error {
 	txn := s.db.Txn(true)

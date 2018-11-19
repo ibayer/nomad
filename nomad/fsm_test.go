@@ -305,6 +305,40 @@ func TestFSM_UpdateNodeStatus(t *testing.T) {
 	})
 }
 
+func TestFSM_UpdateNodeMetadata(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	fsm := testFSM(t)
+	fsm.blockedEvals.SetEnabled(true)
+
+	node := mock.Node()
+	req := structs.NodeRegisterRequest{
+		Node: node,
+	}
+	buf, err := structs.Encode(structs.NodeRegisterRequestType, req)
+	require.NoError(err)
+
+	resp := fsm.Apply(makeLog(buf))
+	require.Nil(resp)
+
+	req2 := structs.NodeUpdateMetadataRequest{
+		NodeID:  node.ID,
+		Upserts: map[string]string{"foo": "value"},
+		Deletes: []string{"pci-dss"},
+	}
+	buf, err = structs.Encode(structs.NodeUpdateMetadataRequestType, req2)
+	require.NoError(err)
+
+	resp = fsm.Apply(makeLog(buf))
+	require.Nil(resp)
+
+	// Verify the status is ready.
+	ws := memdb.NewWatchSet()
+	node, err = fsm.State().NodeByID(ws, req.Node.ID)
+	require.NoError(err)
+	require.Equal(node.Meta, map[string]string{"foo": "value", "version": "5.6", "database": "mysql"})
+}
+
 func TestFSM_BatchUpdateNodeDrain(t *testing.T) {
 	t.Parallel()
 	require := require.New(t)
