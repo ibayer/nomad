@@ -372,6 +372,62 @@ func TestClientEndpoint_Deregister_Vault(t *testing.T) {
 	}
 }
 
+func TestClientEndpoint_UpdateMetadata(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	s1 := TestServer(t, nil)
+	defer s1.Shutdown()
+	codec := rpcClient(t, s1)
+	testutil.WaitForLeader(t, s1.RPC)
+
+	// Create the register request
+	node := mock.Node()
+	reg := &structs.NodeRegisterRequest{
+		Node:         node,
+		WriteRequest: structs.WriteRequest{Region: "global"},
+	}
+
+	// Fetch the response
+	var resp structs.NodeUpdateResponse
+	if err := msgpackrpc.CallWithCodec(codec, "Node.Register", reg, &resp); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	// Update the metadata
+	dereg := &structs.NodeUpdateMetadataRequest{
+		NodeID:       node.ID,
+		Upserts:      map[string]string{"foo": "bar"},
+		WriteRequest: structs.WriteRequest{Region: "global"},
+	}
+	var resp2 structs.NodeUpdateResponse
+	if err := msgpackrpc.CallWithCodec(codec, "Node.UpdateMetadata", dereg, &resp2); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if resp2.Index == 0 {
+		t.Fatalf("bad index: %d", resp2.Index)
+	}
+
+	// Check for the node in the FSM
+	state := s1.fsm.State()
+	ws := memdb.NewWatchSet()
+	out, err := state.NodeByID(ws, node.ID)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if out == nil {
+		t.Fatalf("expected node")
+	}
+	if out.ModifyIndex != resp2.Index {
+		t.Fatalf("index mis-match")
+	}
+
+	if out.Meta["foo"] != "bar" {
+		t.Fatalf("node meta not updated")
+	}
+
+	require.Nil(codec.Close())
+}
+
 func TestClientEndpoint_UpdateStatus(t *testing.T) {
 	t.Parallel()
 	require := require.New(t)

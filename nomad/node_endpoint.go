@@ -2,6 +2,7 @@ package nomad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -47,6 +48,8 @@ const (
 	// reregistered by the heartbeat.
 	NodeHeartbeatEventReregistered = "Node reregistered by heartbeat"
 )
+
+var errNodeNotFound = errors.New("node not found")
 
 // Node endpoint is used for client interactions
 type Node struct {
@@ -276,7 +279,7 @@ func (n *Node) Deregister(args *structs.NodeDeregisterRequest, reply *structs.No
 		return err
 	}
 	if node == nil {
-		return fmt.Errorf("node not found")
+		return errNodeNotFound
 	}
 
 	// Commit this update via Raft
@@ -319,6 +322,55 @@ func (n *Node) Deregister(args *structs.NodeDeregisterRequest, reply *structs.No
 	return nil
 }
 
+// UpdateMetadata is used to dynamically update client metadata. If there are no
+// requested changes, or the node does not exist, an error will be returned.
+func (n *Node) UpdateMetadata(args *structs.NodeUpdateMetadataRequest, reply *structs.NodeUpdateResponse) error {
+	if done, err := n.srv.forward("Node.UpdateMetadata", args, args, reply); done {
+		return err
+	}
+	defer metrics.MeasureSince([]string{"nomad", "client", "update_metadata"}, time.Now())
+
+	// Verify the arguments
+	if args.NodeID == "" {
+		return fmt.Errorf("missing node ID for client metadata update")
+	}
+	if len(args.Upserts) == 0 && len(args.Deletes) == 0 {
+		return errors.New("no upserts or deletions found in request for client metadata update")
+	}
+
+	// Look for the node
+	snap, err := n.srv.fsm.State().Snapshot()
+	if err != nil {
+		return err
+	}
+
+	ws := memdb.NewWatchSet()
+	node, err := snap.NodeByID(ws, args.NodeID)
+	if err != nil {
+		return err
+	}
+	if node == nil {
+		return errNodeNotFound
+	}
+
+	// Commit this update via Raft
+	_, index, err := n.srv.raftApply(structs.NodeUpdateMetadataRequestType, args)
+	if err != nil {
+		n.logger.Error("node metadata update failed", "error", err)
+		return err
+	}
+	reply.NodeModifyIndex = index
+	reply.Index = index
+	n.srv.peerLock.RLock()
+	defer n.srv.peerLock.RUnlock()
+	if err := n.constructNodeServerInfoResponse(snap, reply); err != nil {
+		n.logger.Error("failed to populate NodeUpdateResponse", "error", err)
+		return err
+	}
+
+	return nil
+}
+
 // UpdateStatus is used to update the status of a client node
 func (n *Node) UpdateStatus(args *structs.NodeUpdateStatusRequest, reply *structs.NodeUpdateResponse) error {
 	if done, err := n.srv.forward("Node.UpdateStatus", args, args, reply); done {
@@ -354,7 +406,7 @@ func (n *Node) UpdateStatus(args *structs.NodeUpdateStatusRequest, reply *struct
 		return err
 	}
 	if node == nil {
-		return fmt.Errorf("node not found")
+		return errNodeNotFound
 	}
 
 	// We have a valid node connection, so add the mapping to cache the
@@ -481,7 +533,7 @@ func (n *Node) UpdateDrain(args *structs.NodeUpdateDrainRequest,
 		return err
 	}
 	if node == nil {
-		return fmt.Errorf("node not found")
+		return errNodeNotFound
 	}
 
 	// COMPAT: Remove in 0.9. Attempt to upgrade the request if it is of the old
@@ -576,7 +628,7 @@ func (n *Node) UpdateEligibility(args *structs.NodeUpdateEligibilityRequest,
 		return err
 	}
 	if node == nil {
-		return fmt.Errorf("node not found")
+		return errNodeNotFound
 	}
 
 	if node.DrainStrategy != nil && args.Eligibility == structs.NodeSchedulingEligible {
@@ -659,7 +711,7 @@ func (n *Node) Evaluate(args *structs.NodeEvaluateRequest, reply *structs.NodeUp
 		return err
 	}
 	if node == nil {
-		return fmt.Errorf("node not found")
+		return errNodeNotFound
 	}
 
 	// Create the evaluation
