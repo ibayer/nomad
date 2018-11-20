@@ -331,6 +331,9 @@ message TaskConfig {
 
     // StderrPath is the path to the file to open and write task stderr to
     string stderr_path = 11;
+
+    // Id of the associated allocation
+    string alloc_id = 12;
 }
 
 message Resources {

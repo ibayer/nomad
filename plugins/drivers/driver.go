@@ -108,6 +108,7 @@ type TaskConfig struct {
 	rawDriverConfig []byte
 	StdoutPath      string
 	StderrPath      string
+	AllocID         string
 }
 
 func (tc *TaskConfig) Copy() *TaskConfig {

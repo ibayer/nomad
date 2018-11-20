@@ -445,26 +445,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *cstru
 	// Convert underscores to dashes in taskConfig names for use in volume names #2358
 	sanitizedName := strings.Replace(cfg.Name, "_", "-", -1)
 
-	// Extract allocID from TaskConfig.ID written like: fmt.Sprintf("%s/%s/%d", tr.allocID, tr.taskName, tr.restartTracker.GetCount()),
-	var allocID string
-	if splitID := strings.SplitN(cfg.ID, "/", 2); len(splitID) < 2 {
-		return nil, nil, fmt.Errorf("TaskConfig.ID '%s' was not formatted as expected already started", cfg.ID)
-	} else {
-		allocID = splitID[0]
-	}
-
 	// Mount /alloc
-	allocVolName := fmt.Sprintf("%s-%s-alloc", sanitizedName, allocID)
+	allocVolName := fmt.Sprintf("%s-%s-alloc", sanitizedName, cfg.AllocID)
 	prepareArgs = append(prepareArgs, fmt.Sprintf("--volume=%s,kind=host,source=%s", allocVolName, cfg.TaskDir().SharedAllocDir))
 	prepareArgs = append(prepareArgs, fmt.Sprintf("--mount=volume=%s,target=%s", allocVolName, "/alloc"))
 
 	// Mount /local
-	localVolName := fmt.Sprintf("%s-%s-local", sanitizedName, allocID)
+	localVolName := fmt.Sprintf("%s-%s-local", sanitizedName, cfg.AllocID)
 	prepareArgs = append(prepareArgs, fmt.Sprintf("--volume=%s,kind=host,source=%s", localVolName, cfg.TaskDir().LocalDir))
 	prepareArgs = append(prepareArgs, fmt.Sprintf("--mount=volume=%s,target=%s", localVolName, "/local"))
 
 	// Mount /secrets
-	secretsVolName := fmt.Sprintf("%s-%s-secrets", sanitizedName, allocID)
+	secretsVolName := fmt.Sprintf("%s-%s-secrets", sanitizedName, cfg.AllocID)
 	prepareArgs = append(prepareArgs, fmt.Sprintf("--volume=%s,kind=host,source=%s", secretsVolName, cfg.TaskDir().SecretsDir))
 	prepareArgs = append(prepareArgs, fmt.Sprintf("--mount=volume=%s,target=%s", secretsVolName, "/secrets"))
 
@@ -489,7 +481,7 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *cstru
 			} else if len(parts) != 2 {
 				return nil, nil, fmt.Errorf("invalid rkt volume: %q", rawvol)
 			}
-			volName := fmt.Sprintf("%s-%s-%d", allocID, sanitizedName, i)
+			volName := fmt.Sprintf("%s-%s-%d", cfg.AllocID, sanitizedName, i)
 			prepareArgs = append(prepareArgs, fmt.Sprintf("--volume=%s,kind=host,source=%s,readOnly=%s", volName, parts[0], readOnly))
 			prepareArgs = append(prepareArgs, fmt.Sprintf("--mount=volume=%s,target=%s", volName, parts[1]))
 		}
