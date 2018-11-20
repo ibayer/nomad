@@ -3,6 +3,7 @@ package agent
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -473,6 +474,54 @@ func TestHTTP_NodePurge(t *testing.T) {
 		}
 		if resp1.Node != nil {
 			t.Fatalf("node still exists after purging: %#v", resp1.Node)
+		}
+	})
+}
+
+func TestHTTP_NodeUpdateMetadata(t *testing.T) {
+	t.Parallel()
+	httpTest(t, nil, func(s *TestAgent) {
+		// Create the node
+		node := mock.Node()
+		args := structs.NodeRegisterRequest{
+			Node:         node,
+			WriteRequest: structs.WriteRequest{Region: "global"},
+		}
+		var resp structs.NodeUpdateResponse
+		if err := s.Agent.RPC("Node.Register", &args, &resp); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+
+		// Make the HTTP request to update metadata
+		body := strings.NewReader(`{"Upserts": {"foo": "bar"}}`)
+		req, err := http.NewRequest("POST", "/v1/node/"+node.ID+"/metadata", body)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		respW := httptest.NewRecorder()
+
+		// Make the request
+		_, err = s.Server.NodeSpecificRequest(respW, req)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+
+		// Check for the index
+		if respW.HeaderMap.Get("X-Nomad-Index") == "" {
+			t.Fatalf("missing index")
+		}
+
+		// Ensure that the updated metadata is present
+		args1 := structs.NodeSpecificRequest{
+			NodeID:       node.ID,
+			QueryOptions: structs.QueryOptions{Region: "global"},
+		}
+		var resp1 structs.SingleNodeResponse
+		if err := s.Agent.RPC("Node.GetNode", &args1, &resp1); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		if resp1.Node.Meta["foo"] != "bar" {
+			t.Fatalf("node metadata not updated: %#v", resp1.Node)
 		}
 	})
 }

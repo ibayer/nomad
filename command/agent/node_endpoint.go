@@ -50,6 +50,9 @@ func (s *HTTPServer) NodeSpecificRequest(resp http.ResponseWriter, req *http.Req
 	case strings.HasSuffix(path, "/purge"):
 		nodeName := strings.TrimSuffix(path, "/purge")
 		return s.nodePurge(resp, req, nodeName)
+	case strings.HasSuffix(path, "/metadata"):
+		nodeName := strings.TrimSuffix(path, "/metadata")
+		return s.nodeUpdateMetadata(resp, req, nodeName)
 	default:
 		return s.nodeQuery(resp, req, path)
 	}
@@ -213,5 +216,35 @@ func (s *HTTPServer) nodePurge(resp http.ResponseWriter, req *http.Request, node
 		return nil, err
 	}
 	setIndex(resp, out.Index)
+	return out, nil
+}
+
+type NodeUpdateMetadataRequestBody struct {
+	Upserts map[string]string
+	Deletes []string
+}
+
+func (s *HTTPServer) nodeUpdateMetadata(resp http.ResponseWriter, req *http.Request, nodeID string) (interface{}, error) {
+	if req.Method != "POST" {
+		return nil, CodedError(405, ErrInvalidMethod)
+	}
+	var body NodeUpdateMetadataRequestBody
+	if err := decodeBody(req, &body); err != nil {
+		return nil, CodedError(422, ErrUnprocessibleBody)
+	}
+
+	args := structs.NodeUpdateMetadataRequest{
+		NodeID:  nodeID,
+		Upserts: body.Upserts,
+		Deletes: body.Deletes,
+	}
+	s.parseWriteRequest(req, &args.WriteRequest)
+
+	var out structs.NodeUpdateResponse
+	if err := s.agent.RPC("Node.UpdateMetadata", &args, &out); err != nil {
+		return nil, err
+	}
+	setIndex(resp, out.Index)
+
 	return out, nil
 }
