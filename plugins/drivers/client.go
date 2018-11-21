@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers/proto"
 	"github.com/hashicorp/nomad/plugins/shared"
 	"github.com/hashicorp/nomad/plugins/shared/hclspec"
+	pstructs "github.com/hashicorp/nomad/plugins/shared/structs"
 )
 
 var _ DriverPlugin = &driverPluginClient{}
@@ -102,7 +103,7 @@ func (d *driverPluginClient) handleFingerprint(ctx context.Context, ch chan *Fin
 		}
 
 		f := &Fingerprint{
-			Attributes:        pb.Attributes,
+			Attributes:        pstructs.ConvertProtoAttributeMap(pb.Attributes),
 			Health:            healthStateFromProto(pb.Health),
 			HealthDescription: pb.HealthDescription,
 		}

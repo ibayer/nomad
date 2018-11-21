@@ -38,7 +38,7 @@ func (m *Attribute) Reset()         { *m = Attribute{} }
 func (m *Attribute) String() string { return proto.CompactTextString(m) }
 func (*Attribute) ProtoMessage()    {}
 func (*Attribute) Descriptor() ([]byte, []int) {
-	return fileDescriptor_attribute_aa187fb710a98f5a, []int{0}
+	return fileDescriptor_attribute_47573829d12e3945, []int{0}
 }
 func (m *Attribute) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Attribute.Unmarshal(m, b)
@@ -65,26 +65,20 @@ type isAttribute_Value interface {
 type Attribute_FloatVal struct {
 	FloatVal float64 `protobuf:"fixed64,1,opt,name=float_val,json=floatVal,proto3,oneof"`
 }
-
 type Attribute_IntVal struct {
 	IntVal int64 `protobuf:"varint,2,opt,name=int_val,json=intVal,proto3,oneof"`
 }
-
 type Attribute_StringVal struct {
 	StringVal string `protobuf:"bytes,3,opt,name=string_val,json=stringVal,proto3,oneof"`
 }
-
 type Attribute_BoolVal struct {
 	BoolVal bool `protobuf:"varint,4,opt,name=bool_val,json=boolVal,proto3,oneof"`
 }
 
-func (*Attribute_FloatVal) isAttribute_Value() {}
-
-func (*Attribute_IntVal) isAttribute_Value() {}
-
+func (*Attribute_FloatVal) isAttribute_Value()  {}
+func (*Attribute_IntVal) isAttribute_Value()    {}
 func (*Attribute_StringVal) isAttribute_Value() {}
-
-func (*Attribute_BoolVal) isAttribute_Value() {}
+func (*Attribute_BoolVal) isAttribute_Value()   {}
 
 func (m *Attribute) GetValue() isAttribute_Value {
 	if m != nil {
@@ -230,10 +224,10 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("plugins/shared/structs/proto/attribute.proto", fileDescriptor_attribute_aa187fb710a98f5a)
+	proto.RegisterFile("plugins/shared/structs/proto/attribute.proto", fileDescriptor_attribute_47573829d12e3945)
 }
 
-var fileDescriptor_attribute_aa187fb710a98f5a = []byte{
+var fileDescriptor_attribute_47573829d12e3945 = []byte{
 	// 218 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x34, 0x8f, 0xb1, 0x4e, 0xc3, 0x30,
 	0x10, 0x40, 0x63, 0xda, 0x34, 0xc9, 0x8d, 0x99, 0x8a, 0x10, 0x22, 0x62, 0x40, 0x19, 0x90, 0x33,
